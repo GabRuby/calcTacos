@@ -8,6 +8,7 @@ import { useConfig } from '../../../contexts/ConfigContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { formatCurrency } from '../../../utils/currencyFormatter';
 import { Table } from '../../../types';
+import { useAlert } from '../../../contexts/AlertContext';
 
 interface PaymentCalculatorProps {
   total: number;
@@ -46,6 +47,8 @@ export function PaymentCalculator({ total, tableId, showIcons, localPayment, onL
 
   // Lógica para detectar tamaño de pantalla para mostrar solo iconos
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth < 768); // Asumiendo 'sm' breakpoint de Tailwind es 768px
+
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     const handleResize = () => {
@@ -287,7 +290,7 @@ export function PaymentCalculator({ total, tableId, showIcons, localPayment, onL
                             });
                             setIsMixtoModalOpen(false);
                         } else {
-                            alert('El monto pagado es insuficiente.');
+                            showAlert('El monto pagado es insuficiente.');
                         }
                     }}
                     className="w-full bg-green-500 text-white py-2 px-4 rounded-md font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
