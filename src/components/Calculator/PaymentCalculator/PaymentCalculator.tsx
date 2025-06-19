@@ -17,9 +17,10 @@ interface PaymentCalculatorProps {
   localPayment?: { amount: number; method: 'cash' | 'transfer' | 'card' | 'mixed' | 'NoEsp'; cashPart?: number; transferPart?: number; cardPart?: number; };
   onLocalPaymentChange?: (payment: { amount: number; method: 'cash' | 'transfer' | 'card' | 'mixed' | 'NoEsp'; cashPart?: number; transferPart?: number; cardPart?: number; }) => void;
   isSubaccount?: boolean; // Nueva prop para indicar si es en subcuentas
+  disabled?: boolean; // <-- NUEVO
 }
 
-export function PaymentCalculator({ total, tableId, showIcons, localPayment, onLocalPaymentChange, isSubaccount = false }: PaymentCalculatorProps) {
+export function PaymentCalculator({ total, tableId, showIcons, localPayment, onLocalPaymentChange, isSubaccount = false, disabled = false }: PaymentCalculatorProps) {
   // Usar el pago local si está disponible (para subcuentas), de lo contrario usar el del contexto
   const { tables, updatePayment, closeTable } = useTables();
   const { config } = useConfig();
@@ -117,11 +118,12 @@ export function PaymentCalculator({ total, tableId, showIcons, localPayment, onL
       <div className="flex gap-2">
         <button
           onClick={() => handlePaymentMethodChange('cash')}
+          disabled={disabled}
           className={`flex-1 flex items-center justify-center gap-2 ${buttonPadding} rounded-md border ${
             payment.method === 'cash'
               ? 'bg-green-100 border-green-500 text-green-700'
               : 'bg-white border-gray-600 text-gray-600 hover:bg-gray-50'
-          }`}
+          } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
           {shouldShowOnlyIcons ? (
             <Banknote size={iconSize} />
@@ -134,11 +136,12 @@ export function PaymentCalculator({ total, tableId, showIcons, localPayment, onL
         </button>
         <button
           onClick={() => handlePaymentMethodChange('transfer')}
+          disabled={disabled}
           className={`flex-1 flex items-center justify-center gap-2 ${buttonPadding} rounded-md border ${
             payment.method === 'transfer'
               ? 'bg-blue-100 border-blue-500 text-blue-700'
               : 'bg-white border-gray-600 text-gray-600 hover:bg-gray-50'
-          }`}
+          } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
           {shouldShowOnlyIcons ? (
             <CreditCard size={iconSize} />
@@ -153,11 +156,12 @@ export function PaymentCalculator({ total, tableId, showIcons, localPayment, onL
         {/* Botón Mixto */}
         <button
           onClick={() => setIsMixtoModalOpen(true)}
+          disabled={disabled}
           className={`flex-1 flex items-center justify-center gap-2 ${buttonPadding} rounded-md border ${
             payment.method === 'mixed'
               ? 'bg-purple-100 border-purple-500 text-purple-700'
               : 'bg-white border-gray-600 text-gray-600 hover:bg-gray-50'
-          }`}
+          } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
            {shouldShowOnlyIcons ? (
               <>
@@ -179,6 +183,7 @@ export function PaymentCalculator({ total, tableId, showIcons, localPayment, onL
         onPaymentChange={handlePaymentChange}
         paymentMethod={payment.method}
         isSubaccount={isSubaccount}
+        disabled={disabled}
       />
       
       {payment.method === 'cash' && (
