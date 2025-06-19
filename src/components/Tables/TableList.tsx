@@ -1,9 +1,11 @@
 // TableList.tsx
 import React, { useState } from 'react';
-import { Table2, PlusCircle, Trash2, User, FileText, AlertTriangle } from 'lucide-react';
+import { Table2, PlusCircle, Trash2, User, FileText, AlertTriangle, FolderOpen } from 'lucide-react';
 import { useTables } from '../../contexts/TablesContext';
 import { useMenu } from '../../contexts/MenuContext';
 import { formatTime } from '../../utils/date';
+import { useAlert } from '../../contexts/AlertContext';
+import LoadTableModal from './LoadTableModal';
 
 interface NoMenuModalProps {
   isOpen: boolean;
@@ -64,6 +66,8 @@ export function TableList() {
   const { menuItems } = useMenu();
   const [showNoMenuModal, setShowNoMenuModal] = useState(false);
   const [pendingTableId, setPendingTableId] = useState<string | null>(null);
+  const { showAlert } = useAlert();
+  const [showLoadModal, setShowLoadModal] = useState(false);
 
   const handleAddTable = () => {
     const maxNumber = Math.max(0, ...tables.map(t => t.number));
@@ -82,7 +86,7 @@ export function TableList() {
     );
   
     if (duplicate) {
-      alert('Ya existe una mesa con ese nombre.');
+      showAlert('Ya existe una mesa con ese nombre.');
       return;
     }
   
@@ -125,13 +129,22 @@ export function TableList() {
     <div className="bg-orange-50 p-4 rounded-lg">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-gray-800">Mesas</h2>
-        <button
-          onClick={handleAddTable}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700"
-        >
-          <PlusCircle size={16} />
-          Agregar Mesa
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleAddTable}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700"
+          >
+            <PlusCircle size={16} />
+            Agregar Mesa
+          </button>
+          <button
+            onClick={() => setShowLoadModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <FolderOpen size={16} />
+            Historial
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -215,6 +228,14 @@ export function TableList() {
         }}
         onGoToMenu={handleGoToMenu}
       />
+
+      {/* Modal para cargar mesas */}
+      {showLoadModal && (
+        <LoadTableModal
+          isOpen={showLoadModal}
+          onClose={() => setShowLoadModal(false)}
+        />
+      )}
     </div>
   );
 }
