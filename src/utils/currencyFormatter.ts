@@ -10,33 +10,35 @@
  */
 export const formatCurrency = (
     amount: number,
-    currencyCode: string = 'MXN', // Nuevo parámetro con valor por defecto
-    locale: string = 'es-MX'     // Nuevo parámetro con valor por defecto
+    currencyCode: string = 'MXN',
+    locale: string = 'es-MX'
   ): string => {
+    // Validar el código de moneda
+    let safeCurrency = (typeof currencyCode === 'string' && currencyCode.length === 3) ? currencyCode : 'MXN';
     // Asegurarse de que el input sea un número válido
     if (typeof amount !== 'number' || isNaN(amount)) {
-      // Si el monto no es válido, intentamos formatear 0 con la moneda especificada
-      // para que al menos se vea el símbolo de la moneda correcta si es posible.
       try {
         return new Intl.NumberFormat(locale, {
           style: 'currency',
-          currency: currencyCode,
+          currency: safeCurrency,
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }).format(0);
       } catch (error) {
-        // Fallback si la moneda o locale no son válidos
         console.error("Error al formatear moneda para valor inválido:", error);
         return "$0.00";
       }
     }
-  
-    const formatter = new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  
-    return formatter.format(amount);
+    try {
+      const formatter = new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: safeCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      return formatter.format(amount);
+    } catch (error) {
+      console.error("Error al formatear moneda:", error);
+      return `$${amount.toFixed(2)}`;
+    }
   };
