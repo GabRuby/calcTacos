@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, QrCode } from 'lucide-react';
 import { TacoOrder } from '../../types';
 import { menuItems } from '../../data/menuItems';
 import { formatCurrency } from '../../utils/currencyFormatter';
-import { PaymentCalculator } from '../Calculator/PaymentCalculator/PaymentCalculator'; // Asumiendo que PaymentCalculator es un componente hermano o en esta ruta
+import { PaymentCalculator } from '../Calculator/PaymentCalculator/PaymentCalculator';
 import { useTables } from '../../contexts/TablesContext';
 import { addSaleToDaily } from '../../utils/dailySales';
 import { useDailySales } from '../../contexts/DailySalesContext';
+import { QRCodeSVG } from 'qrcode.react';
 
 // Definición de tipos más flexible para TabKey
 type TabKey = string;
@@ -37,6 +38,8 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
         transferPart?: number;
         cardPart?: number;
     }>({ amount: 0, method: 'cash' });
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [showQrModal, setShowQrModal] = useState<{ tabKey: string | null, isGeneral: boolean }>({ tabKey: null, isGeneral: false });
     const { tables, closeTable } = useTables();
     const { refreshDailySales } = useDailySales();
 
@@ -82,8 +85,21 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
 
     // Efecto para reiniciar el pago local cuando cambia de tab o se marca como pagada
     useEffect(() => {
+        // Si la subcuenta ya tiene un método de pago guardado, restaurarlo
+        if (subaccountPayments[selectedTab]) {
+            const savedPayment = subaccountPayments[selectedTab];
+            setLocalSubaccountPayment({
+                amount: savedPayment.cashPart || savedPayment.transferPart || savedPayment.cardPart || 0,
+                method: savedPayment.method,
+                cashPart: savedPayment.cashPart || 0,
+                transferPart: savedPayment.transferPart || 0,
+                cardPart: savedPayment.cardPart || 0
+            });
+        } else {
+            // Solo reiniciar si es una subcuenta nueva sin método de pago guardado
         setLocalSubaccountPayment({ amount: 0, method: 'cash', cashPart: 0, transferPart: 0, cardPart: 0 });
-    }, [selectedTab, paidSubaccounts]);
+        }
+    }, [selectedTab, subaccountPayments]);
 
     const totalAssignedOverall = (itemId: string): number => {
         let sum = 0;
@@ -146,7 +162,7 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
             return newState;
         });
 
-        setSelectedTab(newLabel as TabKey); // Cast a TabKey después de asegurar que es válido
+        setSelectedTab(newLabel as TabKey);
     };
 
     const handleQuantityChange = (itemId: string, value: number) => {
@@ -259,14 +275,12 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
     };
 
     const isFractionalItem = (menuItem: { id: string; name: string; price: number; category: string; isPesos?: boolean; }): boolean => {
-        // Un ítem fraccionario es aquel que tiene la propiedad isPesos en true
         return !!menuItem.isPesos;
     };
 
     const getDisplayQuantity = (itemId: string, quantity: number): number => {
         const menuItem = menuItems.find(m => m.id === itemId)!;
         if (isFractionalItem(menuItem)) {
-            // Si es un ítem fraccionario, muestra 1 si la cantidad es > 0, de lo contrario 0
             return quantity > 0 ? 1 : 0;
         }
         return quantity;
@@ -308,6 +322,193 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
             totalMixed
         };
     };
+
+    // Función para generar el texto QR de una subcuenta específica
+    const generateSubaccountQRText = (tabKey: string) => {
+        let qrText = `Subcuenta ${tabKey}:\n\n`;
+        
+        order.forEach(item => {
+            const menuItem = menuItems.find(m => m.id === item.id);
+            if (menuItem) {
+                const quantity = tabKey === 'Res'
+                    ? restoQuantity(item.id)
+                    : assignedQuantitiesByTab[tabKey]?.[item.id] || 0;
+                
+                if (quantity > 0) {
+                    qrText += `${menuItem.name} x ${quantity} = ${formatCurrency(menuItem.price * quantity)}\n`;
+                }
+            }
+        });
+        
+        const subtotal = calculateSubTotalForTab(tabKey);
+        const payment = subaccountPayments[tabKey];
+        
+        qrText += `\nSubtotal: ${formatCurrency(subtotal)}\n`;
+        qrText += `Método de pago: ${getPaymentMethodText(payment?.method)}\n`;
+        
+        if (payment?.method === 'mixed') {
+            if (payment.cashPart && payment.cashPart > 0) {
+                qrText += `Efectivo: ${formatCurrency(payment.cashPart)}\n`;
+            }
+            if (payment.transferPart && payment.transferPart > 0) {
+                qrText += `Transferencia: ${formatCurrency(payment.transferPart)}\n`;
+            }
+            if (payment.cardPart && payment.cardPart > 0) {
+                qrText += `Tarjeta: ${formatCurrency(payment.cardPart)}\n`;
+            }
+        }
+        
+        return qrText;
+    };
+
+    // Función para obtener el texto del método de pago
+    const getPaymentMethodText = (method?: string) => {
+        switch (method) {
+            case 'cash': return 'Efectivo';
+            case 'transfer': return 'Transferencia';
+            case 'card': return 'Tarjeta';
+            case 'mixed': return 'Mixto';
+            default: return 'No especificado';
+        }
+    };
+
+    // Función para obtener las subcuentas que se han generado (que tienen productos asignados)
+    const getGeneratedSubaccounts = () => {
+        return tabs.filter(tab => {
+            if (tab === 'Res') {
+                return paidSubaccounts['Res'] || order.some(item => restoQuantity(item.id) > 0);
+            } else {
+                return paidSubaccounts[tab] || order.some(item => (assignedQuantitiesByTab[tab]?.[item.id] || 0) > 0);
+            }
+        });
+    };
+
+    // Función para generar el texto QR de toda la cuenta
+    const generateGeneralQRText = () => {
+        let qrText = `Cuenta completa:\n\n`;
+        order.forEach(item => {
+            const menuItem = menuItems.find(m => m.id === item.id);
+            if (menuItem) {
+                qrText += `${menuItem.name} x ${item.quantity} = ${formatCurrency(menuItem.price * item.quantity)}\n`;
+            }
+        });
+        qrText += `\nTotal: ${formatCurrency(total)}\n`;
+        return qrText;
+    };
+
+    // Función para manejar el cierre de cuenta
+    const handleCloseAccount = async () => {
+        // Calcular la suma global de métodos de pago de todas las subcuentas pagadas
+        const globalPaymentSummary = calculateGlobalPaymentSummary();
+        
+        // Determinar el método de pago principal (el que tiene mayor monto)
+        let primaryPaymentMethod: 'cash' | 'transfer' | 'card' | 'mixed' | 'NoEsp' = 'NoEsp';
+        const maxAmount = Math.max(
+            globalPaymentSummary.cashPart,
+            globalPaymentSummary.transferPart,
+            globalPaymentSummary.cardPart
+        );
+        
+        if (maxAmount > 0) {
+            if (globalPaymentSummary.cashPart === maxAmount) {
+                primaryPaymentMethod = 'cash';
+            } else if (globalPaymentSummary.transferPart === maxAmount) {
+                primaryPaymentMethod = 'transfer';
+            } else if (globalPaymentSummary.cardPart === maxAmount) {
+                primaryPaymentMethod = 'card';
+            }
+        }
+        
+        const sale = {
+            items: order,
+            total: total,
+            timestamp: new Date().toISOString(),
+            tableNumber: parseFloat(tableId),
+            paymentMethod: primaryPaymentMethod,
+            cashPart: globalPaymentSummary.cashPart,
+            transferPart: globalPaymentSummary.transferPart,
+            cardPart: globalPaymentSummary.cardPart,
+        };
+
+        const currentTable = tables.find(t => t.id === tableId);
+        const tableNameAtSale = currentTable?.name ?? `Mesa ${currentTable?.number}`;
+
+        addSaleToDaily(sale, tableId, tableNameAtSale);
+        closeTable(tableId);
+        refreshDailySales();
+        onClose();
+    };
+
+    // MODAL DE RESUMEN COMPACTO
+    const renderSummaryModal = () => (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">Resumen de Cuenta</h3>
+                <ul className="divide-y divide-gray-200 mb-4">
+                    {getGeneratedSubaccounts().map(tabKey => (
+                        <li key={tabKey} className="flex items-center justify-between py-2">
+                            <span className="font-medium text-gray-700">Subcuenta {tabKey}</span>
+                            <span className="font-semibold text-gray-900">{formatCurrency(calculateSubTotalForTab(tabKey))}</span>
+                            <button
+                                className="ml-2 p-1 text-gray-500 hover:text-orange-500"
+                                onClick={() => setShowQrModal({ tabKey, isGeneral: false })}
+                                title={`Ver QR de Subcuenta ${tabKey}`}
+                            >
+                                <QrCode size={18} />
+                            </button>
+                        </li>
+                    ))}
+                    <li className="flex items-center justify-between py-2 font-bold border-t mt-2 pt-2">
+                        <span>Total</span>
+                        <span>{formatCurrency(total)}</span>
+                        <button
+                            className="ml-2 p-1 text-gray-500 hover:text-orange-500"
+                            onClick={() => setShowQrModal({ tabKey: null, isGeneral: true })}
+                            title="Ver QR de toda la cuenta"
+                        >
+                            <QrCode size={20} />
+                        </button>
+                    </li>
+                </ul>
+                <div className="flex justify-center mt-4">
+                    <button
+                        className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 font-semibold"
+                        onClick={() => {
+                            setShowSummaryModal(false);
+                            setTimeout(() => handleCloseAccount(), 200);
+                        }}
+                    >
+                        Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    // MODAL DE QR INDIVIDUAL
+    const renderQrModal = () => (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs relative">
+                <button
+                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowQrModal({ tabKey: null, isGeneral: false })}
+                >
+                    <X size={22} />
+                </button>
+                <h4 className="text-center font-bold text-lg mb-4">
+                    {showQrModal.isGeneral ? 'Cuenta completa' : `Subcuenta ${showQrModal.tabKey}`}
+                </h4>
+                <div className="flex justify-center mb-2">
+                    <QRCodeSVG
+                        value={showQrModal.isGeneral ? generateGeneralQRText() : generateSubaccountQRText(showQrModal.tabKey!)}
+                        size={220}
+                        level="H"
+                    />
+                </div>
+                <p className="text-xs text-gray-500 text-center">Escanea para ver el detalle</p>
+            </div>
+        </div>
+    );
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-1.5 z-50">
@@ -375,7 +576,6 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
 
                             {/* I3: Subcuentas */}
                             <div className="w-[48.36%] bg-emerald-50 p-2 flex flex-col">
-
                             <div className="flex-1">
                                     <div className="flex mb-2 items-center justify-around">
                                         {tabs.map(tab => (
@@ -405,10 +605,12 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
                                                 : assignedQuantitiesByTab[selectedTab]?.[item.id] || 0;
                                             const subtotal = quantity * menuItem.price;
 
+                                        const isDisabled = paidSubaccounts[selectedTab];
+
                                             return (
                                             <div key={item.id} className="flex items-center text-sm py-0">
-                                                    {paidSubaccounts[selectedTab] ? (
-                                                    <span className="w-1/2 text-center py-[0.21rem]">{getDisplayQuantity(item.id, quantity)}</span>
+                                                {isDisabled ? (
+                                                    <span className="w-1/2 text-center py-[0.21rem] opacity-60 cursor-not-allowed">{getDisplayQuantity(item.id, quantity)}</span>
                                                     ) : selectedTab === 'Res' ? (
                                                     <span className="w-1/2 text-center py-[0.21rem]">{getDisplayQuantity(item.id, quantity)}</span>
                                                 ) : (
@@ -425,6 +627,8 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
                                                                 const calculatedQuantity = itemPrice > 0 ? enteredAmount / itemPrice : 0;
                                                                 handleQuantityChange(item.id, calculatedQuantity);
                                                             }}
+                                                            disabled={isDisabled}
+                                                            style={isDisabled ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
                                                         />
                                                     ) : (
                                                         <input
@@ -436,6 +640,8 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
                                                             onChange={(e) =>
                                                                 handleQuantityChange(item.id, parseInt(e.target.value) || 0)
                                                             }
+                                                            disabled={isDisabled}
+                                                            style={isDisabled ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
                                                         />
                                                     )
                                                     )}
@@ -456,8 +662,9 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
                                         localPayment={localSubaccountPayment}
                                         onLocalPaymentChange={setLocalSubaccountPayment}
                                         isSubaccount={true}
+                                    disabled={paidSubaccounts[selectedTab]}
                                     />
-                                </div>
+                            </div>
                             </div>
                         </div>
                         
@@ -500,47 +707,9 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
                     
                     <div className="w-full h-[10%] bg-white flex items-center justify-center">
                         <button
-                            onClick={async () => {
+                        onClick={() => {
                                 if (allItemsAssigned) {
-                                    // Calcular la suma global de métodos de pago de todas las subcuentas pagadas
-                                    const globalPaymentSummary = calculateGlobalPaymentSummary();
-                                    
-                                    // Determinar el método de pago principal (el que tiene mayor monto)
-                                    let primaryPaymentMethod: 'cash' | 'transfer' | 'card' | 'mixed' | 'NoEsp' = 'NoEsp';
-                                    const maxAmount = Math.max(
-                                        globalPaymentSummary.cashPart,
-                                        globalPaymentSummary.transferPart,
-                                        globalPaymentSummary.cardPart
-                                    );
-                                    
-                                    if (maxAmount > 0) {
-                                        if (globalPaymentSummary.cashPart === maxAmount) {
-                                            primaryPaymentMethod = 'cash';
-                                        } else if (globalPaymentSummary.transferPart === maxAmount) {
-                                            primaryPaymentMethod = 'transfer';
-                                        } else if (globalPaymentSummary.cardPart === maxAmount) {
-                                            primaryPaymentMethod = 'card';
-                                        }
-                                    }
-                                    
-                                    const sale = {
-                                        items: order,
-                                        total: total,
-                                        timestamp: new Date().toISOString(),
-                                        tableNumber: parseFloat(tableId),
-                                        paymentMethod: primaryPaymentMethod,
-                                        cashPart: globalPaymentSummary.cashPart,
-                                        transferPart: globalPaymentSummary.transferPart,
-                                        cardPart: globalPaymentSummary.cardPart,
-                                    };
-
-                                    const currentTable = tables.find(t => t.id === tableId);
-                                    const tableNameAtSale = currentTable?.name ?? `Mesa ${currentTable?.number}`;
-
-                                    addSaleToDaily(sale, tableId, tableNameAtSale);
-
-                                    closeTable(tableId);
-                                    refreshDailySales();
+                                setShowSummaryModal(true);
                                 } else {
                                     onClose();
                                 }
@@ -552,6 +721,9 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
                         </button>
                 </div>
             </div>
+
+            {showSummaryModal && renderSummaryModal()}
+            {showQrModal.tabKey !== null || showQrModal.isGeneral ? renderQrModal() : null}
         </div>
     );
 };
