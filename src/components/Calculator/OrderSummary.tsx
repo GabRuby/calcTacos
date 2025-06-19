@@ -1,12 +1,12 @@
 // OrderSummary.tsx
 import React, { useState, useEffect } from 'react';
-import { menuItems } from '../../data/menuItems';
 import { TacoOrder } from '../../types';
 import { PaymentCalculator } from './PaymentCalculator/PaymentCalculator';
 import SplitBillContainer from './SplitBillContainer';
 import { Split, X, Minus, Plus, QrCode } from 'lucide-react';
 import { addSaleToDaily } from '../../utils/dailySales';
 import { useTables } from '../../contexts/TablesContext';
+import { useMenu } from '../../contexts/MenuContext';
 import { QRCodeSVG } from 'qrcode.react'; // Importar QRCodeSVG
 import { formatCurrency } from '../../utils/currencyFormatter'; // Importar formatCurrency
 
@@ -37,6 +37,7 @@ export function OrderSummary({
   const BASE_FONT_INDEX = 0;
 
   const { tables } = useTables();
+  const { menuItems } = useMenu();
   const activeTable = tables.find(t => t.id === tableId);
   const payment = activeTable?.payment || { amount: 0, method: 'cash' as const };
 
