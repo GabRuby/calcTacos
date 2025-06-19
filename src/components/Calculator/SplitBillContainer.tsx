@@ -8,6 +8,7 @@ import { useTables } from '../../contexts/TablesContext';
 import { addSaleToDaily } from '../../utils/dailySales';
 import { useDailySales } from '../../contexts/DailySalesContext';
 import { QRCodeSVG } from 'qrcode.react';
+import { useAlert } from '../../contexts/AlertContext';
 
 // Definición de tipos más flexible para TabKey
 type TabKey = string;
@@ -42,6 +43,7 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
     const [showQrModal, setShowQrModal] = useState<{ tabKey: string | null, isGeneral: boolean }>({ tabKey: null, isGeneral: false });
     const { tables, closeTable } = useTables();
     const { refreshDailySales } = useDailySales();
+    const { showAlert } = useAlert();
 
     // Estado para almacenar los métodos de pago de cada subcuenta
     const [subaccountPayments, setSubaccountPayments] = useState<{
@@ -215,7 +217,7 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
         const assignedItems = calculateAssignedItemsForTab(selectedTab);
 
         if (assignedItems === 0) {
-            alert(`No hay productos asignados en la subcuenta "${selectedTab}".`);
+            showAlert(`No hay productos asignados en la subcuenta "${selectedTab}".`);
             return;
         }
 
@@ -228,7 +230,7 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
 
             // Verificar si todos los ítems están completamente asignados
             if (!order.every(item => totalAssignedOverall(item.id) === item.quantity)) {
-                alert('No se puede pagar esta subcuenta porque aún quedan productos del pedido principal sin asignar a ninguna subcuenta.');
+                showAlert('No se puede pagar esta subcuenta porque aún quedan productos del pedido principal sin asignar a ninguna subcuenta.');
                 return;
             }
 
@@ -239,7 +241,7 @@ const SplitBillContainer = ({ order, total, tableId, onClose }: SplitBillContain
             const projectedTotalPaid = totalPaidBeforeThisTab + subtotal;
 
             if (Math.abs(projectedTotalPaid - total) > tolerance) {
-                alert(`El monto total a pagar, incluyendo esta subcuenta, no coincide con el total del pedido. Asegúrate de que todos los montos estén correctamente asignados.`);
+                showAlert(`El monto total a pagar, incluyendo esta subcuenta, no coincide con el total del pedido. Asegúrate de que todos los montos estén correctamente asignados.`);
                 return;
             }
         }
