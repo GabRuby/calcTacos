@@ -10,9 +10,10 @@ interface PaymentInputProps {
   onPaymentChange: (amount: number) => void;
   paymentMethod: 'cash' | 'transfer' | 'card' | 'mixed' | 'NoEsp';
   isSubaccount?: boolean;
+  disabled?: boolean;
 }
 
-export function PaymentInput({ total, payment, onPaymentChange, paymentMethod, isSubaccount = false }: PaymentInputProps) {
+export function PaymentInput({ total, payment, onPaymentChange, paymentMethod, isSubaccount = false, disabled = false }: PaymentInputProps) {
   const { config } = useConfig();
   const [showQR, setShowQR] = useState(false);
 
@@ -36,15 +37,17 @@ export function PaymentInput({ total, payment, onPaymentChange, paymentMethod, i
               const numValue = parseFloat(value) || 0;
               onPaymentChange(numValue);
             }}
-            className={`w-full pl-7 pr-24 ${inputPaddingVertical} border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+            className={`w-full pl-7 pr-24 ${inputPaddingVertical} border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${disabled ? 'opacity-60 cursor-not-allowed bg-gray-100' : ''}`}
             placeholder="0.00"
+            disabled={disabled}
           />
           <div className="absolute inset-y-0 right-0 flex items-center gap-2">
             {paymentMethod === 'transfer' && (
               <button
                 onClick={() => setShowQR(true)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                className={`p-1 rounded-full transition-colors ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-100'}`}
                 title="Mostrar QR de pago"
+                disabled={disabled}
               >
                 <QrCode className="text-gray-400" size={20} />
               </button>
@@ -59,7 +62,7 @@ export function PaymentInput({ total, payment, onPaymentChange, paymentMethod, i
       </div>
 
       {/* Modal del QR */}
-      {showQR && paymentMethod === 'transfer' && (
+      {showQR && paymentMethod === 'transfer' && !disabled && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">
             <div className="flex justify-between items-center mb-4">
