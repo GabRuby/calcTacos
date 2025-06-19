@@ -5,6 +5,7 @@ import { DailySalesActions } from './DailySalesActions';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useDailySales } from '../../contexts/DailySalesContext';
 import { formatQuantity } from '../../utils/numberFormat';
+import { useAlert } from '../../contexts/AlertContext';
 
 type NipView = 'auth' | 'recovery' | 'recoveryNewPin';
 
@@ -31,6 +32,7 @@ export function GlobalSalesTotal() {
   const { dailySales, refreshDailySales } = useDailySales();
   const { total, products } = dailySales;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { showAlert } = useAlert();
 
   const handleReset = () => {
     refreshDailySales();
@@ -47,7 +49,7 @@ export function GlobalSalesTotal() {
         importDailySales(content);
         refreshDailySales();
       } catch (error) {
-        alert('Error al importar las ventas. Verifica que el archivo sea válido.');
+        showAlert('Error al importar las ventas. Verifica que el archivo sea válido.');
       }
     };
     reader.readAsText(file);
