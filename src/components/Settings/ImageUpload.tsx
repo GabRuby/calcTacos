@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Upload, X } from 'lucide-react';
+import { useAlert } from '../../contexts/AlertContext';
 
 interface ImageUploadProps {
   imageUrl: string;
@@ -10,6 +11,7 @@ interface ImageUploadProps {
 
 export function ImageUpload({ imageUrl, onImageChange, onImageRemove, aspectRatio = '1/1' }: ImageUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { showAlert } = useAlert();
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -18,7 +20,7 @@ export function ImageUpload({ imageUrl, onImageChange, onImageRemove, aspectRati
     // Validar tipo de archivo
     const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
     if (!validTypes.includes(file.type)) {
-      alert('Por favor selecciona una imagen en formato JPG, PNG o GIF');
+      showAlert('Por favor selecciona una imagen en formato JPG, PNG o GIF');
       return;
     }
 
