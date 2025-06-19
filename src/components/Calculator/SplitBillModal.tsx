@@ -4,6 +4,7 @@ import { menuItems } from '../../data/menuItems';
 import { PaymentCalculator } from '../Calculator/PaymentCalculator/PaymentCalculator'; // Asumiendo que PaymentCalculator es un componente hermano o en esta ruta
 import { TacoOrder } from '../../types';
 import { formatCurrency } from '../../utils/currencyFormatter';
+import { useAlert } from '../../contexts/AlertContext';
 
 interface SplitBillModalProps {
     order: TacoOrder[];
@@ -27,6 +28,7 @@ const SplitBillModal = ({ order, total, onClose /*, onTotalPaidAmountChange */ }
     const [assignedQuantitiesByTab, setAssignedQuantitiesByTab] = useState<AssignedQuantitiesByTab>({});
     const [paidSubaccounts, setPaidSubaccounts] = useState<{ [key: string]: boolean }>({});
     const [selectedCurrency, setSelectedCurrency] = useState('MXN'); // <-- ESTA LÍNEA YA LA TIENES
+    const { showAlert } = useAlert();
     // ...
 
     const getShortenedName = (name: string): string => {
@@ -168,7 +170,7 @@ const SplitBillModal = ({ order, total, onClose /*, onTotalPaidAmountChange */ }
             const assignedItems = calculateAssignedItemsForTab(selectedTab);
         
             if (assignedItems === 0) {
-                alert(`No hay productos asignados en la subcuenta "${selectedTab}".`);
+                showAlert(`No hay productos asignados en la subcuenta "${selectedTab}".`);
                 return;
             }
         
@@ -184,7 +186,7 @@ const SplitBillModal = ({ order, total, onClose /*, onTotalPaidAmountChange */ }
         
                 // 1. Verificar si todos los ítems están completamente asignados
                 if (!allAssigned) { // allAssigned debe ser order.every(item => totalAssignedOverall(item.id) === item.quantity)
-                    alert('No se puede pagar esta subcuenta porque aún quedan productos del pedido principal sin asignar a ninguna subcuenta.');
+                    showAlert('No se puede pagar esta subcuenta porque aún quedan productos del pedido principal sin asignar a ninguna subcuenta.');
                     return; // Impide el pago
                 }
         
@@ -193,7 +195,7 @@ const SplitBillModal = ({ order, total, onClose /*, onTotalPaidAmountChange */ }
                 const projectedTotalPaid = totalPaidBeforeThisTab + subtotal; // Monto total si esta subcuenta se paga
         
                 if (Math.abs(projectedTotalPaid - total) > tolerance) {
-                    alert(`El monto total a pagar, incluyendo esta subcuenta, no coincide con el total del pedido. Asegúrate de que todos los montos estén correctamente asignados.`);
+                    showAlert(`El monto total a pagar, incluyendo esta subcuenta, no coincide con el total del pedido. Asegúrate de que todos los montos estén correctamente asignados.`);
                     return; // Impide el pago
                 }
             }
