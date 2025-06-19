@@ -7,6 +7,7 @@ import { getMenu } from './menu';
 import { formatCurrency } from './currencyFormatter';
 import { formatQuantity } from './numberFormat';
 import * as XLSX from 'xlsx'; // Aunque no se use en el PDF, se incluye por si acaso
+import { useAlert } from '../contexts/AlertContext';
 
 interface ReportConfig {
   type: 'all' | 'topN';
@@ -30,10 +31,13 @@ export const generateNewDailyReport = async (config: BusinessConfig, reportConfi
   const { date, sales, total, products } = getDailySalesReport();
   console.log('Datos del reporte:', { date, sales: sales.length, total, products: products.length });
   
+  const alert = typeof window !== 'undefined' && window.alert ? window.alert : undefined;
+  const { showAlert } = useAlert();
+  
   // Verificar si hay datos para mostrar
   if (products.length === 0) {
     console.log('No hay productos vendidos para mostrar en el reporte');
-    alert('No hay ventas registradas para generar el reporte. Agrega algunas ventas primero.');
+    showAlert('No hay ventas registradas para generar el reporte. Agrega algunas ventas primero.');
     return;
   }
   
@@ -382,11 +386,11 @@ export const generateNewDailyReport = async (config: BusinessConfig, reportConfi
     console.log('Guardando PDF como:', fileName);
     doc.save(fileName);
     console.log('PDF generado exitosamente');
-    alert('Reporte generado exitosamente. Revisa tu carpeta de descargas.');
+    showAlert('Reporte generado exitosamente. Revisa tu carpeta de descargas.');
   } catch (error) {
     console.error('Error generando PDF:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    alert('Error al generar el reporte: ' + errorMessage);
+    showAlert('Error al generar el reporte: ' + errorMessage);
   }
 };
 
