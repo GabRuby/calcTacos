@@ -9,6 +9,7 @@ import { Header } from './components/Header/Header';
 import { SettingsModal } from './components/Settings/SettingsModal';
 import { GlobalSalesTotal } from './components/Sales/GlobalSalesTotal';
 import { LoginForm } from './components/Auth/LoginForm';
+import { AlertProvider } from './contexts/AlertContext';
 
 // Props para AppContent
 interface AppContentProps {
@@ -90,15 +91,17 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
-    <UserProvider>
-      <ConfigProvider>
-        <MenuProvider>
-          <TablesProvider>
-            <AppContent showSettings={showSettings} setShowSettings={setShowSettings} />
-          </TablesProvider>
-        </MenuProvider>
-      </ConfigProvider>
-    </UserProvider>
+    <AlertProvider>
+      <UserProvider>
+        <ConfigProvider>
+          <MenuProvider>
+            <TablesProvider>
+              <AppContent showSettings={showSettings} setShowSettings={setShowSettings} />
+            </TablesProvider>
+          </MenuProvider>
+        </ConfigProvider>
+      </UserProvider>
+    </AlertProvider>
   );
 }
 
