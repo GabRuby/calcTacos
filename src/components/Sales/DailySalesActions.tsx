@@ -434,25 +434,19 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
                   Número de productos
                 </label>
                 <input
-                  type="number"
-                  min="1"
-                  max={maxNProducts}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={tempNValue}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '') {
-                      setTempNValue('');
-                    } else {
-                      const num = Math.min(maxNProducts, Math.max(1, parseInt(val) || 1));
-                      setTempNValue(num);
-                      setReportConfig({ ...reportConfig, nProducts: num });
-                    }
+                    setTempNValue(e.target.value.replace(/[^0-9]/g, ''));
                   }}
                   onBlur={() => {
-                    if (tempNValue === '' || isNaN(Number(tempNValue))) {
-                      setTempNValue(1);
-                      setReportConfig({ ...reportConfig, nProducts: 1 });
-                    }
+                    let nVal = parseInt(tempNValue as string);
+                    if (isNaN(nVal) || nVal < 1) nVal = 1;
+                    if (nVal > maxNProducts) nVal = maxNProducts;
+                    setTempNValue(nVal);
+                    setReportConfig({ ...reportConfig, nProducts: nVal });
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
