@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable';
 import { getDailySalesReport } from '../../utils/dailySales';
 import { QrCode, Copy } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { getConfig } from '../../utils/config';
 
 interface LoadTableModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ const LoadTableModal: React.FC<LoadTableModalProps> = ({ isOpen, onClose }) => {
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const config = getConfig();
 
   if (!isOpen) return null;
 
@@ -86,7 +88,7 @@ const LoadTableModal: React.FC<LoadTableModalProps> = ({ isOpen, onClose }) => {
     const finalY = (doc as any).lastAutoTable.finalY || y + 30;
     doc.setFontSize(13);
     doc.text('Total:', 140, finalY + 10);
-    doc.text(formatCurrency(total), 195, finalY + 10, { align: 'right' });
+    doc.text(formatCurrency(total, config.currencyCode || 'MXN'), 195, finalY + 10, { align: 'right' });
     // Guardar PDF
     doc.save(`nota-mesa-${selectedSale.tableNumber}.pdf`);
   };
@@ -113,15 +115,23 @@ const LoadTableModal: React.FC<LoadTableModalProps> = ({ isOpen, onClose }) => {
         <div>
           <h3 className="text-lg font-semibold mb-2">Mesas cerradas</h3>
           <ul className="divide-y divide-gray-200 max-h-60 overflow-y-auto">
-            {sales.map(sale => (
-              <li key={sale.id} className={`py-2 px-2 cursor-pointer rounded ${selectedSaleId === sale.id ? 'bg-orange-100' : ''}`}
-                  onClick={() => setSelectedSaleId(sale.id)}>
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">{sale.tableNameAtSale ?? `Mesa ${sale.tableNumber}`}</span>
-                  <span className="text-sm text-gray-500">{sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString() : ''}</span>
-                </div>
-              </li>
-            ))}
+            {sales.map(sale => {
+              // Calcular el total de la venta
+              const totalSale = sale.items.reduce((sum, item) => {
+                const product = menuItems.find(m => m.id === item.id);
+                return sum + ((product?.price || 0) * item.quantity);
+              }, 0);
+              return (
+                <li key={sale.id} className={`py-2 px-2 cursor-pointer rounded ${selectedSaleId === sale.id ? 'bg-orange-100' : ''}`}
+                    onClick={() => setSelectedSaleId(sale.id)}>
+                  <div className="flex justify-between items-center w-full gap-2">
+                    <span className="font-medium flex-1 truncate">{sale.tableNameAtSale ?? `Mesa ${sale.tableNumber}`}</span>
+                    <span className="text-sm text-gray-500 whitespace-nowrap">{sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString() : ''}</span>
+                    <span className="text-sm text-gray-700 font-semibold whitespace-nowrap">{formatCurrency(totalSale, config.currencyCode || 'MXN')}</span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
         {/* Detalle de la venta seleccionada */}
@@ -148,7 +158,7 @@ const LoadTableModal: React.FC<LoadTableModalProps> = ({ isOpen, onClose }) => {
             </ul>
             <div className="flex justify-between font-bold text-base mt-2">
               <span>Total</span>
-              <span>{formatCurrency(total)}</span>
+              <span>{formatCurrency(total, config.currencyCode || 'MXN')}</span>
             </div>
             <div className="text-sm text-gray-600 mt-1">Método de pago: <span className="font-semibold">{paymentMethodText}</span></div>
             <button
