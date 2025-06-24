@@ -24,15 +24,16 @@ interface OtherProductsGroup {
   profitability: number;
 }
 
-export const generateNewDailyReport = async (config: BusinessConfig, reportConfig: ReportConfig) => {
+export const generateNewDailyReport = async (
+  config: BusinessConfig,
+  reportConfig: ReportConfig,
+  showAlert: (msg: string) => void
+) => {
   console.log('Generando reporte con config:', config);
   console.log('Report config:', reportConfig);
   
   const { date, sales, total, products } = getDailySalesReport();
   console.log('Datos del reporte:', { date, sales: sales.length, total, products: products.length });
-  
-  const alert = typeof window !== 'undefined' && window.alert ? window.alert : undefined;
-  const { showAlert } = useAlert();
   
   // Verificar si hay datos para mostrar
   if (products.length === 0) {
@@ -298,16 +299,26 @@ export const generateNewDailyReport = async (config: BusinessConfig, reportConfi
     const breakdownTableHead = [['Mesa y Hora', ...breakdownProductNames, 'Efec', 'Transf', 'Tarj', 'Total']];
     const breakdownTableBody: string[][] = [];
 
+    // Inicializar acumuladores para subtotales
+    const subtotalCantidad: number[] = new Array(breakdownProductNames.length).fill(0);
+    const subtotalEfectivo: { cantidad: number, monto: number } = { cantidad: 0, monto: 0 };
+    const subtotalTransfer: { cantidad: number, monto: number } = { cantidad: 0, monto: 0 };
+    const subtotalTarjeta: { cantidad: number, monto: number } = { cantidad: 0, monto: 0 };
+    let subtotalTotal: number = 0;
+
     sales.forEach(sale => {
       const tableDisplay = sale.tableNameAtSale ? sale.tableNameAtSale : `Mesa ${sale.tableNumber || 'Sin Mesa'}`;
       const saleTime = new Date(sale.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-      const row: string[] = [`${tableDisplay}\n${saleTime}`]; // Primera columna con nombre de mesa y hora en dos líneas
-      let otherProductsTotalForSale = 0; // Para sumar ventas de productos no incluidos en productsToShow
+      const row: string[] = [`${tableDisplay}\n${saleTime}`];
+      let otherProductsTotalForSale = 0;
+      let otherProductsMoneyForSale = 0;
 
-      // Cantidades de productos para esta venta específica
-      productsToShow.forEach(product => {
+      // Cantidades y montos de productos para esta venta específica
+      productsToShow.forEach((product, idx) => {
         const item = sale.items.find(i => i.id === product.id);
-        row.push(formatQuantity(item?.quantity || 0)); // Mostrar cantidad, formateada
+        const cantidad = item?.quantity || 0;
+        row.push(formatQuantity(cantidad));
+        subtotalCantidad[idx] += cantidad;
       });
 
       // Calcular total de 'Otros' para esta venta si el grupo 'Otros' existe
@@ -315,19 +326,77 @@ export const generateNewDailyReport = async (config: BusinessConfig, reportConfi
         sale.items.forEach(item => {
           if (!productsToShow.some(p => p.id === item.id)) {
             otherProductsTotalForSale += item.quantity;
+            // Buscar el precio del producto para sumar el monto
+            const menuItem = menuItems.find(m => m.id === item.id);
+            otherProductsMoneyForSale += (menuItem?.price || 0) * item.quantity;
           }
         });
-        row.push(formatQuantity(otherProductsTotalForSale)); // Mostrar cantidad de otros, formateada
+        row.push(formatQuantity(otherProductsTotalForSale));
+        subtotalCantidad[productsToShow.length] += otherProductsTotalForSale;
       }
 
-      // Añadir totales por método de pago para esta venta (se mantiene el monto)
-      row.push(formatCurrency(sale.cashPart || 0, config.currencyCode));
-      row.push(formatCurrency(sale.transferPart || 0, config.currencyCode));
-      row.push(formatCurrency(sale.cardPart || 0, config.currencyCode));
-      row.push(formatCurrency(sale.total, config.currencyCode)); // Total de esta venta (monto de venta)
+      // Añadir totales por método de pago para esta venta
+      const efectivo = sale.cashPart || (sale.paymentMethod === 'cash' ? sale.total : 0);
+      const transferencia = sale.transferPart || (sale.paymentMethod === 'transfer' ? sale.total : 0);
+      const tarjeta = sale.cardPart || (sale.paymentMethod === 'card' ? sale.total : 0);
+      row.push(formatCurrency(efectivo, config.currencyCode));
+      row.push(formatCurrency(transferencia, config.currencyCode));
+      row.push(formatCurrency(tarjeta, config.currencyCode));
+      row.push(formatCurrency(sale.total, config.currencyCode));
+
+      subtotalEfectivo.cantidad += efectivo > 0 ? 1 : 0;
+      subtotalEfectivo.monto += efectivo;
+      subtotalTransfer.cantidad += transferencia > 0 ? 1 : 0;
+      subtotalTransfer.monto += transferencia;
+      subtotalTarjeta.cantidad += tarjeta > 0 ? 1 : 0;
+      subtotalTarjeta.monto += tarjeta;
+      subtotalTotal += sale.total;
 
       breakdownTableBody.push(row);
     });
+
+    // Fila de subtotal de cantidades
+    const subtotalCantidadRow: string[] = ['Subtotal Cantidad'];
+    subtotalCantidad.forEach(cant => subtotalCantidadRow.push(formatQuantity(cant)));
+    subtotalCantidadRow.push(
+      formatQuantity(subtotalEfectivo.cantidad),
+      formatQuantity(subtotalTransfer.cantidad),
+      formatQuantity(subtotalTarjeta.cantidad),
+      formatQuantity(subtotalCantidad.reduce((a, b) => a + b, 0))
+    );
+    breakdownTableBody.push(subtotalCantidadRow);
+
+    // Fila de subtotal de montos
+    const subtotalMontoRow: string[] = ['Subtotal Monto'];
+    // Calcular montos por producto/otros
+    productsToShow.forEach((product, idx) => {
+      const monto = sales.reduce((sum, sale) => {
+        const item = sale.items.find(i => i.id === product.id);
+        const menuItem = menuItems.find(m => m.id === product.id);
+        return sum + ((menuItem?.price || 0) * (item?.quantity || 0));
+      }, 0);
+      subtotalMontoRow.push(formatCurrency(monto, config.currencyCode));
+    });
+    if (othersGroup) {
+      // Sumar montos de productos no incluidos en productsToShow
+      const montoOtros = sales.reduce((sum, sale) => {
+        return sum + sale.items.reduce((acc, item) => {
+          if (!productsToShow.some(p => p.id === item.id)) {
+            const menuItem = menuItems.find(m => m.id === item.id);
+            return acc + ((menuItem?.price || 0) * item.quantity);
+          }
+          return acc;
+        }, 0);
+      }, 0);
+      subtotalMontoRow.push(formatCurrency(montoOtros, config.currencyCode));
+    }
+    subtotalMontoRow.push(
+      formatCurrency(subtotalEfectivo.monto, config.currencyCode),
+      formatCurrency(subtotalTransfer.monto, config.currencyCode),
+      formatCurrency(subtotalTarjeta.monto, config.currencyCode),
+      formatCurrency(subtotalTotal, config.currencyCode)
+    );
+    breakdownTableBody.push(subtotalMontoRow);
 
     // Recalcular anchos de columna para la tabla de desglose
     const breakdownMesaWidth = usableWidth * 0.17; // 17% para la columna 'Mesa y Hora' (ajustado para que coincida con Resumen)
