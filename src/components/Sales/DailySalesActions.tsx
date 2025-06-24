@@ -6,6 +6,7 @@ import { clearDailySales, getDailySalesReport } from '../../utils/dailySales';
 import { getMenu } from '../../utils/menu';
 import { WorkingHours } from '../../types';
 import { useConfig } from '../../contexts/ConfigContext';
+import { useAlert } from '../../contexts/AlertContext';
 
 interface DailySalesActionsProps {
   onReset: () => void;
@@ -48,6 +49,7 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
   
   const totalMenuItems = getMenu().length;
   const maxNProducts = Math.max(1, totalMenuItems - 1);
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     if (!currentConfig?.workingHours) return;
@@ -379,7 +381,7 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
 
   const handleGeneratePdf = async () => {
     if (currentConfig) {
-      generateNewDailyReport(currentConfig, reportConfig);
+      await generateNewDailyReport(currentConfig, reportConfig, showAlert);
     }
   };
 
