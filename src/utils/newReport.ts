@@ -188,28 +188,26 @@ export const generateNewDailyReport = async (
     console.log('pageTotalWidth:', pageTotalWidth, 'mm');
     console.log('usableWidth:', usableWidth, 'mm');
 
-    // Anchos fijos basados en porcentajes para las columnas de Resumen y Total
-    const resumenWidth = usableWidth * 0.17; // 17% (ajustado para que coincida con Desglose)
-    const totalColWidth = usableWidth * 0.10; // 10% (ajustado)
-
-    console.log('resumenWidth:', resumenWidth, 'mm');
-    console.log('totalColWidth:', totalColWidth, 'mm');
-
-    // Columnas que necesitan anchos dinámicos (productos + Efec + Transf + Tarj)
-    const numberOfProductColumns = productsToShow.length;
-    const numberOfPaymentColumns = 3; // Efec, Transf, Tarj
-    const numberOfDynamicColumns = numberOfProductColumns + numberOfPaymentColumns;
-
-    // Ancho restante para distribuir entre las columnas dinámicas
-    const remainingWidth = usableWidth - resumenWidth - totalColWidth;
-    const widthPerDynamicColumn = numberOfDynamicColumns > 0 ? remainingWidth / numberOfDynamicColumns : 0; // Reintroducido
+    // Calcular head de la tabla de resumen
+    const resumenHead = ['Resumen', ...productNames, 'Efec', 'Transf', 'Tarj', 'Total'];
+    const totalColumnsResumen = resumenHead.length;
+    const resumenWidth = usableWidth * 0.17;
+    let totalColWidth;
+    if (reportConfig.type === 'topN') {
+      totalColWidth = usableWidth * 0.13;
+    } else {
+      totalColWidth = usableWidth * 0.10;
+    }
+    const dynamicColumnsResumen = totalColumnsResumen - 2; // Quitar la primera y la última
+    const remainingWidthResumen = usableWidth - resumenWidth - totalColWidth;
+    const widthPerDynamicColumnResumen = remainingWidthResumen / dynamicColumnsResumen;
 
     // Calcular el tamaño de fuente óptimo para los encabezados de producto (Reintegrado)
     let minHeaderFontSize = 7; // Empezar con un tamaño base más pequeño
     const cellPaddingForText = 1; // Ajustado a 1
-    const availableWidthForText = widthPerDynamicColumn - (cellPaddingForText * 2); // Ancho disponible para el texto dentro de la celda
+    const availableWidthForText = widthPerDynamicColumnResumen - (cellPaddingForText * 2); // Ancho disponible para el texto dentro de la celda
 
-    if (numberOfProductColumns > 0) {
+    if (dynamicColumnsResumen > 0) {
       productNames.forEach(productName => {
         for (let size = minHeaderFontSize; size >= 4; size--) { // Probar tamaños de fuente descendentes hasta 4
           doc.setFontSize(size);
@@ -226,49 +224,26 @@ export const generateNewDailyReport = async (
     // Usar el tamaño de fuente más pequeño requerido para los encabezados en todas las fuentes dinámicas
     let dynamicFontSize = minHeaderFontSize;
 
-    console.log('remainingWidth:', remainingWidth, 'mm');
-    console.log('widthPerDynamicColumn:', widthPerDynamicColumn, 'mm');
+    console.log('remainingWidth:', remainingWidthResumen, 'mm');
+    console.log('widthPerDynamicColumn:', widthPerDynamicColumnResumen, 'mm');
     console.log('minHeaderFontSize (calculated for products):', minHeaderFontSize, 'pt');
 
-    // Definir estilos de columnas dinámicamente
+    // Definir estilos de columnas dinámicamente para la tabla de resumen
     const dynamicColumnStyles: { [key: string]: { cellWidth?: number, minCellWidth?: number, fillColor?: [number, number, number] } } = {
       '0': { cellWidth: resumenWidth }, // Columna Resumen (índice 0)
     };
-
-    let currentIndexSummary = 1; // Índice para las columnas de la tabla de resumen
-    // Columnas de productos para la tabla de resumen
-    for (let i = 0; i < numberOfProductColumns; i++) {
-      dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: widthPerDynamicColumn }; // Reasignado
-      currentIndexSummary++;
+    let currentIndexSummary = 1;
+    // Columnas intermedias (productos, otros, métodos de pago)
+    for (; currentIndexSummary < totalColumnsResumen - 1; currentIndexSummary++) {
+      dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: widthPerDynamicColumnResumen };
     }
-
-    // Columnas de métodos de pago para la tabla de resumen
-    dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: widthPerDynamicColumn }; // Efec (Reasignado)
-    currentIndexSummary++;
-    dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: widthPerDynamicColumn }; // Transf (Reasignado)
-    currentIndexSummary++;
-    dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: widthPerDynamicColumn }; // Tarj (Reasignado)
-    currentIndexSummary++;
-
-    // Columna Total (última columna, índice ajustado)
-    dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: totalColWidth };
-
-    console.log('dynamicColumnStyles:', dynamicColumnStyles);
-    
-    // Calcular la suma total de los anchos de columna asignados para la tabla de resumen
-    let sumOfColumnWidths = 0;
-    for (const key in dynamicColumnStyles) {
-        if (dynamicColumnStyles[key].cellWidth) {
-            sumOfColumnWidths += dynamicColumnStyles[key].cellWidth || 0;
-        }
-    }
-    console.log('Suma total de anchos de columna (Resumen):', sumOfColumnWidths, 'mm');
-    console.log('Ancho útil de la página (usableWidth):', usableWidth, 'mm');
+    // Columna Total (última)
+    dynamicColumnStyles[currentIndexSummary.toString()] = { cellWidth: totalColWidth, minCellWidth: 40 };
 
     // Llamada a autoTable para la tabla de resumen
     autoTable(doc, {
       startY: 65,
-      head: [['Resumen', ...productNames, 'Efec', 'Transf', 'Tarj', 'Total']],
+      head: [resumenHead],
       body: tableData,
       theme: 'grid',
       styles: { fontSize: dynamicFontSize, cellPadding: 1, overflow: 'linebreak', halign: 'center', valign: 'middle' },
@@ -280,23 +255,24 @@ export const generateNewDailyReport = async (
 
     // --- Tabla de Desglose de Ventas ---
     let startYDesglose = 0;
-    // Comprobar si doc.lastAutoTable y su finalY están disponibles
     if ((doc as any).lastAutoTable && typeof (doc as any).lastAutoTable.finalY === 'number') {
-      startYDesglose = (doc as any).lastAutoTable.finalY + 10; // 10mm de espacio después de la tabla de resumen
+      startYDesglose = (doc as any).lastAutoTable.finalY + 10;
     } else {
-      // Valor de respaldo si finalY de la tabla anterior no está disponible
-      startYDesglose = 100; // Un valor predeterminado razonable
+      startYDesglose = 100;
       console.warn('No se pudo determinar finalY de la tabla anterior, usando startYDesglose de respaldo:', startYDesglose);
     }
     doc.setFontSize(10);
     doc.text('Desglose de Ventas del día', 15, startYDesglose, { align: 'left' });
 
-    const breakdownProductNames = [...productNames]; // Copiar productNames de la tabla de resumen
+    // Generar nombres de columnas para desglose (sin duplicar 'Otros')
+    const breakdownProductNames = productsToShow.map(product => product.name);
     if (othersGroup) {
-      breakdownProductNames.push(othersGroup.name); // Añadir 'Otros' si existía en el resumen
+      breakdownProductNames.push(othersGroup.name); // Solo una vez
     }
-
-    const breakdownTableHead = [['Mesa y Hora', ...breakdownProductNames, 'Efec', 'Transf', 'Tarj', 'Total']];
+    // Definir el head de la tabla de desglose
+    const breakdownTableHead = [
+      ['Mesa y Hora', ...breakdownProductNames, 'Efec', 'Transf', 'Tarj', 'Total']
+    ];
     const breakdownTableBody: string[][] = [];
 
     // Inicializar acumuladores para subtotales
@@ -311,9 +287,8 @@ export const generateNewDailyReport = async (
       const saleTime = new Date(sale.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
       const row: string[] = [`${tableDisplay}\n${saleTime}`];
       let otherProductsTotalForSale = 0;
-      let otherProductsMoneyForSale = 0;
 
-      // Cantidades y montos de productos para esta venta específica
+      // Cantidades de productos para esta venta específica
       productsToShow.forEach((product, idx) => {
         const item = sale.items.find(i => i.id === product.id);
         const cantidad = item?.quantity || 0;
@@ -326,9 +301,6 @@ export const generateNewDailyReport = async (
         sale.items.forEach(item => {
           if (!productsToShow.some(p => p.id === item.id)) {
             otherProductsTotalForSale += item.quantity;
-            // Buscar el precio del producto para sumar el monto
-            const menuItem = menuItems.find(m => m.id === item.id);
-            otherProductsMoneyForSale += (menuItem?.price || 0) * item.quantity;
           }
         });
         row.push(formatQuantity(otherProductsTotalForSale));
@@ -368,7 +340,6 @@ export const generateNewDailyReport = async (
 
     // Fila de subtotal de montos
     const subtotalMontoRow: string[] = ['Subtotal Monto'];
-    // Calcular montos por producto/otros
     productsToShow.forEach((product, idx) => {
       const monto = sales.reduce((sum, sale) => {
         const item = sale.items.find(i => i.id === product.id);
@@ -378,7 +349,6 @@ export const generateNewDailyReport = async (
       subtotalMontoRow.push(formatCurrency(monto, config.currencyCode));
     });
     if (othersGroup) {
-      // Sumar montos de productos no incluidos en productsToShow
       const montoOtros = sales.reduce((sum, sale) => {
         return sum + sale.items.reduce((acc, item) => {
           if (!productsToShow.some(p => p.id === item.id)) {
@@ -399,34 +369,31 @@ export const generateNewDailyReport = async (
     breakdownTableBody.push(subtotalMontoRow);
 
     // Recalcular anchos de columna para la tabla de desglose
-    const breakdownMesaWidth = usableWidth * 0.17; // 17% para la columna 'Mesa y Hora' (ajustado para que coincida con Resumen)
+    const breakdownMesaWidth = usableWidth * 0.17;
     const breakdownNumberOfProductColumns = productsToShow.length;
-    const breakdownNumberOfPaymentColumns = 3; // Efec, Transf, Tarj
+    const breakdownNumberOfPaymentColumns = 3;
     let breakdownNumberOfDynamicColumns = breakdownNumberOfProductColumns + breakdownNumberOfPaymentColumns;
     if (othersGroup) {
-      breakdownNumberOfDynamicColumns += 1; // Sumar 1 si hay columna 'Otros'
+      breakdownNumberOfDynamicColumns += 1;
     }
-
     const breakdownRemainingWidth = usableWidth - breakdownMesaWidth - totalColWidth;
     const breakdownWidthPerDynamicColumn = breakdownNumberOfDynamicColumns > 0 ? breakdownRemainingWidth / breakdownNumberOfDynamicColumns : 0;
 
+    // Asignar estilos de columna alineados con el head y body
     const breakdownColumnStyles: { [key: string]: { cellWidth?: number, minCellWidth?: number, fillColor?: [number, number, number] } } = {
-      '0': { cellWidth: breakdownMesaWidth }, // Columna 'Mesa' (índice 0)
+      '0': { cellWidth: breakdownMesaWidth },
     };
-
     let currentIndex = 1;
     // Columnas de productos
     for (let i = 0; i < breakdownNumberOfProductColumns; i++) {
       breakdownColumnStyles[currentIndex.toString()] = { cellWidth: breakdownWidthPerDynamicColumn };
       currentIndex++;
     }
-
     // Columna 'Otros' si existe
     if (othersGroup) {
       breakdownColumnStyles[currentIndex.toString()] = { cellWidth: breakdownWidthPerDynamicColumn };
       currentIndex++;
     }
-
     // Columnas de métodos de pago
     breakdownColumnStyles[currentIndex.toString()] = { cellWidth: breakdownWidthPerDynamicColumn }; // Efec
     currentIndex++;
@@ -434,9 +401,22 @@ export const generateNewDailyReport = async (
     currentIndex++;
     breakdownColumnStyles[currentIndex.toString()] = { cellWidth: breakdownWidthPerDynamicColumn }; // Tarj
     currentIndex++;
+    // Columna Total (última)
+    breakdownColumnStyles[currentIndex.toString()] = { cellWidth: totalColWidth, minCellWidth: 40 };
 
-    // Columna Total
-    breakdownColumnStyles[currentIndex.toString()] = { cellWidth: totalColWidth };
+    // Validar que el número de columnas en el head, body y estilos coincida
+    // Si no coincide, ajustar el head/body o loggear advertencia
+    const expectedColumns = Object.keys(breakdownColumnStyles).length;
+    if (
+      breakdownTableHead[0].length !== expectedColumns ||
+      breakdownTableBody.some(row => row.length !== expectedColumns)
+    ) {
+      console.warn('Desajuste en número de columnas en desglose:', {
+        head: breakdownTableHead[0].length,
+        estilos: expectedColumns,
+        body: breakdownTableBody.map(row => row.length)
+      });
+    }
 
     autoTable(doc, {
       startY: startYDesglose + 5, // Un poco más abajo de la leyenda
