@@ -50,6 +50,7 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
   const totalMenuItems = getMenu().length;
   const maxNProducts = Math.max(1, totalMenuItems - 1);
   const { showAlert } = useAlert();
+  const [tempNValue, setTempNValue] = useState<string | number>('');
 
   useEffect(() => {
     if (!currentConfig?.workingHours) return;
@@ -129,6 +130,15 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
     
     return () => clearInterval(interval);
   }, [currentConfig?.workingHours]);
+
+  useEffect(() => {
+    // Sincronizar tempNValue con el valor real cuando cambia el tipo de reporte
+    if (reportConfig.type === 'topN') {
+      setTempNValue(reportConfig.nProducts || maxNProducts);
+    } else {
+      setTempNValue('');
+    }
+  }, [reportConfig.type, reportConfig.nProducts, maxNProducts]);
 
   const handleReset = () => {
     const confirmationMessage = `La próxima hora para reinicio automático es el ${nextResetInfo.date} a las ${nextResetInfo.time}.\n\n¿Deseas reiniciar el contador del día ahora? Esta acción no se puede deshacer.`;
@@ -427,11 +437,23 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
                   type="number"
                   min="1"
                   max={maxNProducts}
-                  value={reportConfig.nProducts || maxNProducts}
-                  onChange={(e) => setReportConfig({ 
-                    ...reportConfig, 
-                    nProducts: Math.min(maxNProducts, Math.max(1, parseInt(e.target.value) || 1)) 
-                  })}
+                  value={tempNValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setTempNValue('');
+                    } else {
+                      const num = Math.min(maxNProducts, Math.max(1, parseInt(val) || 1));
+                      setTempNValue(num);
+                      setReportConfig({ ...reportConfig, nProducts: num });
+                    }
+                  }}
+                  onBlur={() => {
+                    if (tempNValue === '' || isNaN(Number(tempNValue))) {
+                      setTempNValue(1);
+                      setReportConfig({ ...reportConfig, nProducts: 1 });
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
               </div>
@@ -512,4 +534,4 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
       {renderNipModal()}
     </>
   );
-} 
+}
