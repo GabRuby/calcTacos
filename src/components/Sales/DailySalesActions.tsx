@@ -512,4 +512,4 @@ export function DailySalesActions({ onReset }: DailySalesActionsProps) {
       {renderNipModal()}
     </>
   );
-}
+} 
